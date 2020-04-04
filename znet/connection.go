@@ -7,6 +7,7 @@ import (
 	"llvvlv00.org/zinx/utils"
 	"llvvlv00.org/zinx/ziface"
 	"net"
+	"sync"
 )
 
 // 链接模块
@@ -14,23 +15,29 @@ type Connection struct {
 	// 当前Conn隶属于哪个Server
 	TcpServer ziface.IServer
 
-	//当前链接的socket TCP套接字
+	// 当前链接的socket TCP套接字
 	Conn *net.TCPConn
 
-	//链接的ID
+	// 链接的ID
 	ConnID uint32
 
-	//当前的链接状态
+	// 当前的链接状态
 	isClosed bool
 
-	//告知当前链接已经退出/停止的 channel (由Reader告知Writer由异常)
+	// 告知当前链接已经退出/停止的 channel (由Reader告知Writer由异常)
 	ExitChan chan bool
 
 	// 消息的管理MsgID 和对应的业务API关系
 	MsgHandler ziface.IMessageHandler
 
-	//无缓冲的管道用于读写Goroutine直接的消息通信
+	// 无缓冲的管道用于读写Goroutine直接的消息通信
 	msgChan chan []byte
+
+	// 链接属性集合
+	property map[string]interface{}
+
+	// 保护链接属性的锁
+	propertyLock sync.RWMutex
 }
 
 // 初始化链接模块的方法
@@ -43,6 +50,7 @@ func NewConnection(server ziface.IServer,conn *net.TCPConn, connID uint32,msgHan
 		isClosed:false,
 		msgChan: make(chan []byte),
 		ExitChan:make(chan bool, 1),
+		property:make(map[string]interface{}),
 	}
 
 	// 将conn加入到ConnManager中
@@ -201,6 +209,36 @@ func (c *Connection) SendMsg(msgId uint32, data []byte) error {
 	// 将数据发送给msgChan Writer读到 msgChan再发送给客户端
 	c.msgChan <- binaryMsg
 	return nil
+}
+
+
+//设置链接属性
+func(c *Connection)SetProperty(key string, value interface{}) {
+	c.propertyLock.Lock()
+	defer c.propertyLock.Unlock()
+
+	// 添加一个链接属性
+	c.property[key] = value
+}
+
+//获取链接属性
+func(c *Connection)GetProperty(key string)(interface{}, error) {
+	c.propertyLock.RLock()
+	defer c.propertyLock.RUnlock()
+	if value, ok := c.property[key]; ok {
+		return value, nil
+	}else {
+		return nil, errors.New("no property found")
+	}
+}
+
+//移除链接属性
+func(c *Connection)RemoveProperty(key string){
+	c.propertyLock.Lock()
+	defer c.propertyLock.Unlock()
+
+	//删除属性
+	delete(c.property, key)
 }
 
 

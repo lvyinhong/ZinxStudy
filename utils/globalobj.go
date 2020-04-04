@@ -55,7 +55,7 @@ func (g *GlobalObj) Reload() {
 		panic(err)
 	}
 
-	data, err := ioutil.ReadFile(path + "/myDemo/ZinxV0.7/conf/zinx.json")
+	data, err := ioutil.ReadFile(path + "/conf/zinx.json")
 	if err != nil {
 		panic(err)
 	}
